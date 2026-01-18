@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
@@ -23,10 +24,124 @@ const getRiskLevel = (amount: string) => {
   return "low";
 };
 
+// Helper function to format date for input
+const formatDateForInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Interface for filter criteria
+interface FilterCriteria {
+  dateFrom: string;
+  dateTo: string;
+  amountMin: string;
+  amountMax: string;
+  status: string[];
+  riskLevel: string[];
+}
+
 export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  
+  // Filter state
+  const [filters, setFilters] = useState<FilterCriteria>({
+    dateFrom: "",
+    dateTo: "",
+    amountMin: "",
+    amountMax: "",
+    status: [],
+    riskLevel: []
+  });
+
+  // Apply all filters
+  const filteredTransactions = transactions.filter((transaction) => {
+    // Search query filter
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = 
+      transaction.transactionHash.toLowerCase().includes(query) ||
+      transaction.buyer.toLowerCase().includes(query) ||
+      transaction.receiver.toLowerCase().includes(query) ||
+      transaction.amountSC.toLowerCase().includes(query);
+    
+    if (!matchesSearch) return false;
+
+    // Date range filter
+    if (filters.dateFrom || filters.dateTo) {
+      const txDate = transaction.timestamp ? new Date(transaction.timestamp) : null;
+      if (txDate) {
+        if (filters.dateFrom) {
+          const fromDate = new Date(filters.dateFrom);
+          if (txDate < fromDate) return false;
+        }
+        if (filters.dateTo) {
+          const toDate = new Date(filters.dateTo);
+          toDate.setHours(23, 59, 59, 999); // Include the entire day
+          if (txDate > toDate) return false;
+        }
+      }
+    }
+
+    // Amount range filter (using amountSC)
+    const amount = parseFloat(transaction.amountSC);
+    if (filters.amountMin && amount < parseFloat(filters.amountMin)) return false;
+    if (filters.amountMax && amount > parseFloat(filters.amountMax)) return false;
+
+    // Status filter (all blockchain transactions are completed)
+    if (filters.status.length > 0 && !filters.status.includes("completed")) {
+      return false;
+    }
+
+    // Risk level filter
+    if (filters.riskLevel.length > 0) {
+      const risk = getRiskLevel(transaction.amountSC);
+      if (!filters.riskLevel.includes(risk)) return false;
+    }
+
+    return true;
+  });
+
+  const handleResetFilters = () => {
+    setFilters({
+      dateFrom: "",
+      dateTo: "",
+      amountMin: "",
+      amountMax: "",
+      status: [],
+      riskLevel: []
+    });
+  };
+
+  const handleToggleStatus = (status: string) => {
+    setFilters(prev => ({
+      ...prev,
+      status: prev.status.includes(status)
+        ? prev.status.filter(s => s !== status)
+        : [...prev.status, status]
+    }));
+  };
+
+  const handleToggleRiskLevel = (risk: string) => {
+    setFilters(prev => ({
+      ...prev,
+      riskLevel: prev.riskLevel.includes(risk)
+        ? prev.riskLevel.filter(r => r !== risk)
+        : [...prev.riskLevel, risk]
+    }));
+  };
+
+  const hasActiveFilters = 
+    filters.dateFrom || 
+    filters.dateTo || 
+    filters.amountMin || 
+    filters.amountMax || 
+    filters.status.length > 0 || 
+    filters.riskLevel.length > 0;
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -80,9 +195,18 @@ export default function TransactionsPage() {
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
+              onClick={() => setIsFilterOpen(true)}
+            >
               <Filter className="size-4 mr-2" />
               Filter
+              {hasActiveFilters && (
+                <span className="absolute -top-1 -right-1 size-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">
+                  {[filters.dateFrom, filters.dateTo, filters.amountMin, filters.amountMax].filter(Boolean).length + 
+                   filters.status.length + filters.riskLevel.length}
+                </span>
+              )}
             </Button>
             {!hasFetched ? (
               <Button 
@@ -129,8 +253,15 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                <div className="text-sm text-muted-foreground mb-2">
+                  {hasActiveFilters || searchQuery ? "FILTERED RESULTS" : "TOTAL TRANSACTIONS"}
+                </div>
+                <div className="text-4xl font-bold">
+                  {loading ? "..." : filteredTransactions.length}
+                  {hasActiveFilters || searchQuery ? (
+                    <span className="text-base text-muted-foreground ml-2">/ {transactions.length}</span>
+                  ) : null}
+                </div>
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -270,6 +401,176 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Filter Dialog */}
+      <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+        <DialogContent className="max-w-2xl bg-card border-border/40">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-display">Filter Transactions</DialogTitle>
+            <p className="text-sm text-muted-foreground">Apply filters to narrow down your transaction list</p>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Date Range Filter */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="size-4 text-muted-foreground" />
+                <Label className="text-base font-medium">Date Range</Label>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dateFrom" className="text-sm text-muted-foreground">From Date</Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                    className="bg-background/50 border-border/40"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dateTo" className="text-sm text-muted-foreground">To Date</Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                    className="bg-background/50 border-border/40"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Amount Range Filter */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Amount Range (SC)</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amountMin" className="text-sm text-muted-foreground">Minimum Amount</Label>
+                  <Input
+                    id="amountMin"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={filters.amountMin}
+                    onChange={(e) => setFilters(prev => ({ ...prev, amountMin: e.target.value }))}
+                    className="bg-background/50 border-border/40"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="amountMax" className="text-sm text-muted-foreground">Maximum Amount</Label>
+                  <Input
+                    id="amountMax"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={filters.amountMax}
+                    onChange={(e) => setFilters(prev => ({ ...prev, amountMax: e.target.value }))}
+                    className="bg-background/50 border-border/40"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Transaction Status</Label>
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={filters.status.includes("completed") ? "default" : "outline"}
+                  className="cursor-pointer px-4 py-2"
+                  onClick={() => handleToggleStatus("completed")}
+                >
+                  <div className="size-2 rounded-full bg-green-500 mr-2" />
+                  Completed
+                </Badge>
+                <Badge
+                  variant={filters.status.includes("pending") ? "default" : "outline"}
+                  className="cursor-pointer px-4 py-2"
+                  onClick={() => handleToggleStatus("pending")}
+                >
+                  <div className="size-2 rounded-full bg-yellow-500 mr-2" />
+                  Pending
+                </Badge>
+                <Badge
+                  variant={filters.status.includes("failed") ? "default" : "outline"}
+                  className="cursor-pointer px-4 py-2"
+                  onClick={() => handleToggleStatus("failed")}
+                >
+                  <div className="size-2 rounded-full bg-red-500 mr-2" />
+                  Failed
+                </Badge>
+              </div>
+            </div>
+
+            {/* Risk Level Filter */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Risk Level</Label>
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={filters.riskLevel.includes("low") ? "default" : "outline"}
+                  className={`cursor-pointer px-4 py-2 ${
+                    filters.riskLevel.includes("low")
+                      ? "bg-green-500 text-white border-green-500 hover:bg-green-600"
+                      : "bg-green-500/20 text-green-500 border-green-500/40 hover:bg-green-500/30"
+                  }`}
+                  onClick={() => handleToggleRiskLevel("low")}
+                >
+                  Low Risk
+                </Badge>
+                <Badge
+                  variant={filters.riskLevel.includes("medium") ? "default" : "outline"}
+                  className={`cursor-pointer px-4 py-2 ${
+                    filters.riskLevel.includes("medium")
+                      ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                      : "bg-orange-500/20 text-orange-500 border-orange-500/40 hover:bg-orange-500/30"
+                  }`}
+                  onClick={() => handleToggleRiskLevel("medium")}
+                >
+                  Medium Risk
+                </Badge>
+                <Badge
+                  variant={filters.riskLevel.includes("high") ? "default" : "outline"}
+                  className={`cursor-pointer px-4 py-2 ${
+                    filters.riskLevel.includes("high")
+                      ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                      : "bg-primary/20 text-primary border-primary/40 hover:bg-primary/30"
+                  }`}
+                  onClick={() => handleToggleRiskLevel("high")}
+                >
+                  High Risk
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Actions */}
+          <div className="flex justify-between items-center pt-4 border-t border-border/40">
+            <Button 
+              variant="ghost" 
+              onClick={handleResetFilters}
+              disabled={!hasActiveFilters}
+            >
+              Clear All Filters
+            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsFilterOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => setIsFilterOpen(false)}
+              >
+                Apply Filters
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction Details Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">

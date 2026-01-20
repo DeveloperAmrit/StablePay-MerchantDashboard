@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +37,12 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  const transactionStats = useMemo(() => {
+    return {
+      total: transactions.length,
+    };
+  }, [transactions]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -140,7 +146,7 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -203,7 +209,7 @@ export default function TransactionsPage() {
                       Error: {error}
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}

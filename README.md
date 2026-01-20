@@ -154,8 +154,6 @@ pnpm build
 5.  **Commit your Changes**: `git commit -m 'feat: Add some AmazingFeature'`
 6.  **Push to the Branch**: `git push origin feature/AmazingFeature`
 7.  **Open a Pull Request**
-
-
-
-
-
+<div align="center" >
+  <H1>Have a great start to your journey!</H1>
+</div>

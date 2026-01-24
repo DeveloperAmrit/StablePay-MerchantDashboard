@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
@@ -42,6 +43,60 @@ export default function TransactionsPage() {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
   }
+
+  const downloadCSV = () => {
+    if (!transactions.length) return;
+
+    const headers = ["Transaction Hash", "Buyer", "Receiver", "Amount (SC)", "Amount (BC)", "Block Number", "Network", "Timestamp"];
+    const csvContent = [
+      headers.join(","),
+      ...transactions.map(tx => [
+        `"${tx.transactionHash}"`,
+        `"${tx.buyer}"`,
+        `"${tx.receiver}"`,
+        `"${tx.amountSC}"`,
+        `"${tx.amountBC}"`,
+        `"${tx.blockNumber.toString()}"`,
+        `"${tx.networkName}"`,
+        `"${tx.timestamp ? new Date(tx.timestamp).toISOString() : ""}"`
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `transactions_${new Date().toISOString()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const downloadJSON = () => {
+    if (!transactions.length) return;
+
+    // Convert BigInt to string for JSON serialization
+    const safeTransactions = transactions.map(tx => ({
+        ...tx,
+        blockNumber: tx.blockNumber.toString()
+    }));
+
+    const jsonContent = JSON.stringify(safeTransactions, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `transactions_${new Date().toISOString()}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   return (
     <DashboardPageLayout
@@ -113,13 +168,24 @@ export default function TransactionsPage() {
                   <RefreshCw className={`size-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   {loading ? 'Loading...' : 'Refresh Data'}
                 </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={clearCache}
-                  className="text-xs"
-                >
-                  Clear Cache
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline">
+                      <Download className="size-4 mr-2" />
+                      Export
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-40 p-2">
+                    <div className="flex flex-col gap-1">
+                      <Button variant="ghost" className="justify-start w-full" onClick={downloadCSV}>
+                        Export as CSV
+                      </Button>
+                      <Button variant="ghost" className="justify-start w-full" onClick={downloadJSON}>
+                        Export as JSON
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
           </div>

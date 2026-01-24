@@ -68,6 +68,17 @@ export function useTransactions() {
         }
     };
 
+    const fetchExportTransactions = async (limit: number | 'all') => {
+        try {
+            const merchantAddress = '';
+            // Note: We do not cache export data as it might be large or custom scoped
+            return await transactionService.fetchTransactionsForExport(limit, merchantAddress);
+        } catch (err) {
+            console.error('Failed to fetch export transactions:', err);
+            throw err;
+        }
+    };
+
     const clearCache = () => {
         localStorage.removeItem(CACHE_KEY);
         setTransactions([]);
@@ -80,6 +91,7 @@ export function useTransactions() {
         error,
         hasFetched,
         fetchTransactions,
+        fetchExportTransactions,
         clearCache
     };
 }

@@ -5,7 +5,7 @@ import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -16,6 +16,7 @@ import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
+import { TransactionEvent } from "@/lib/transaction-service"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -40,18 +41,44 @@ const getRiskLevel = (amount: string) => {
 };
 
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+  const { transactions, loading, error, hasFetched, fetchTransactions, fetchExportTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
+  const [isExporting, setIsExporting] = useState(false)
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
   }
 
-  const downloadCSV = () => {
+  const openExportDialog = (format: 'csv' | 'json') => {
+    setExportFormat(format);
+    setIsExportDialogOpen(true);
+  }
+
+  const handleExport = async (limit: number | 'all') => {
+    setIsExporting(true);
     try {
-      if (!transactions.length) {
+      const data = await fetchExportTransactions(limit);
+      if (exportFormat === 'csv') {
+        downloadCSV(data);
+      } else {
+        downloadJSON(data);
+      }
+      setIsExportDialogOpen(false);
+    } catch (e) {
+      console.error("Export failed:", e);
+      alert("Export failed. Please check console for details.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  const downloadCSV = (data: TransactionEvent[] = transactions) => {
+    try {
+      if (!data.length) {
         alert("No transactions to export.");
         return;
       }
@@ -59,7 +86,7 @@ export default function TransactionsPage() {
       const headers = ["Transaction Hash", "Buyer", "Receiver", "Amount (SC)", "Amount (BC)", "Block Number", "Network", "Timestamp"];
       const csvContent = [
         headers.join(","),
-        ...transactions.map(tx => [
+        ...data.map(tx => [
           `"${tx.transactionHash || ""}"`,
           `"${tx.buyer || ""}"`,
           `"${tx.receiver || ""}"`,
@@ -87,15 +114,15 @@ export default function TransactionsPage() {
     }
   };
 
-  const downloadJSON = () => {
+  const downloadJSON = (data: TransactionEvent[] = transactions) => {
     try {
-      if (!transactions.length) {
+      if (!data.length) {
         alert("No transactions to export.");
       return;
       }
 
       // Convert BigInt to string for JSON serialization
-      const safeTransactions = transactions.map(tx => ({
+      const safeTransactions = data.map(tx => ({
         ...tx,
         blockNumber: tx.blockNumber?.toString() || "0"
       }));
@@ -178,7 +205,6 @@ export default function TransactionsPage() {
                 {loading ? 'Loading...' : 'See Transactions'}
               </Button>
             ) : (
-              <div className="flex gap-2">
                 <Button 
                   variant="secondary" 
                   onClick={fetchTransactions} 
@@ -187,24 +213,24 @@ export default function TransactionsPage() {
                   <RefreshCw className={`size-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   {loading ? 'Loading...' : 'Refresh Data'}
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={transactions.length === 0}>
-                      <Download className="size-4 mr-2" />
-                      Export
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={downloadCSV}>
-                      Export as CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={downloadJSON}>
-                      Export as JSON
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
             )}
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="size-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => openExportDialog('csv')}>
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openExportDialog('json')}>
+                  Export as JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -443,6 +469,38 @@ export default function TransactionsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-card border-border/40">
+          <DialogHeader>
+            <DialogTitle>Export Transactions</DialogTitle>
+            <DialogDescription>
+              Select the number of most recent transactions to export as {exportFormat.toUpperCase()}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Button onClick={() => handleExport(1000)} disabled={isExporting} variant="outline">
+              Last 1,000 Transactions
+            </Button>
+            <Button onClick={() => handleExport(5000)} disabled={isExporting} variant="outline">
+              Last 5,000 Transactions
+            </Button>
+            <Button onClick={() => handleExport(50000)} disabled={isExporting} variant="outline">
+              Last 50,000 Transactions
+            </Button>
+             <Button onClick={() => handleExport('all')} disabled={isExporting} variant="outline">
+              All Transactions
+            </Button>
+          </div>
+          {isExporting && (
+             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Fetching data from blockchain...
+             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       </div>
     </DashboardPageLayout>
   )

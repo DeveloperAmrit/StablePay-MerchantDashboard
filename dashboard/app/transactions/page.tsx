@@ -10,10 +10,20 @@ import { Label } from "@/components/ui/label"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
+import { NETWORKS } from "@/lib/config"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
+
+// Helper function to get explorer URL for a transaction
+const getExplorerUrl = (chainId: number, txHash: string): string => {
+  const network = Object.values(NETWORKS).find(n => n.chainId === chainId);
+  if (network?.explorerUrl) {
+    return `${network.explorerUrl}/tx/${txHash}`;
+  }
+  return `https://sepolia.etherscan.io/tx/${txHash}`;
 };
 
 // Helper function to get risk level based on amount
@@ -143,6 +153,16 @@ export default function TransactionsPage() {
     filters.status.length > 0 || 
     filters.riskLevel.length > 0;
 
+  const filteredTransactions = transactions.filter((transaction) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      transaction.transactionHash.toLowerCase().includes(query) ||
+      transaction.buyer.toLowerCase().includes(query) ||
+      transaction.receiver.toLowerCase().includes(query) ||
+      transaction.amountSC.toLowerCase().includes(query)
+    );
+  });
+
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
@@ -245,7 +265,12 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input placeholder="Search transactions" className="pl-10 bg-background/50 border-border/40" />
+              <Input 
+                placeholder="Search transactions" 
+                className="pl-10 bg-background/50 border-border/40" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
@@ -305,6 +330,7 @@ export default function TransactionsPage() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">RECEIVER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">STATUS</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">BLOCK</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-28">BLOCKCHAIN</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">AMOUNT SC</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">RISK</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-20">ACTIONS</th>
@@ -313,24 +339,30 @@ export default function TransactionsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-red-500">
+                    <td colSpan={9} className="px-6 py-8 text-center text-red-500">
                       Error: {error}
                     </td>
                   </tr>
                 ) : transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
                     </td>
                   </tr>
+                ) : filteredTransactions.length === 0 ? (
+                   <tr>
+                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                      No results found for "{searchQuery}"
+                    </td>
+                  </tr>
                 ) : (
-                  transactions.map((transaction, index) => (
+                  filteredTransactions.map((transaction, index) => (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
@@ -350,6 +382,9 @@ export default function TransactionsPage() {
                           <MapPin className="size-4 text-muted-foreground" />
                           #{transaction.blockNumber.toString()}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                        {transaction.networkName || 'Unknown'}
                       </td>
                       <td className="px-6 py-4 font-mono whitespace-nowrap">{transaction.amountSC} SC</td>
                       <td className="px-6 py-4">
@@ -373,7 +408,8 @@ export default function TransactionsPage() {
                           className="size-8" 
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`https://sepolia.etherscan.io/tx/${transaction.transactionHash}`, '_blank');
+                            const explorerUrl = getExplorerUrl(transaction.chainId, transaction.transactionHash);
+                            window.open(explorerUrl, '_blank', 'noopener,noreferrer');
                           }}
                         >
                           <ExternalLink className="size-4" />
@@ -385,6 +421,7 @@ export default function TransactionsPage() {
                 {/* Empty rows to fill remaining space */}
                 {Array.from({ length: 10 }).map((_, index) => (
                   <tr key={`empty-${index}`} className="border-b border-border/40">
+                    <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>

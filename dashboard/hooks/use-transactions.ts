@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 interface CachedData {
     transactions: (Omit<TransactionEvent, 'blockNumber'> & { blockNumber: string })[];
@@ -19,18 +22,23 @@ export function useTransactions() {
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
-       // Clear state when wallet changes
-         useEffect(() => {
-             latestWalletRef.current = walletAddress;
-            // Reset state for new wallet context
-            setTransactions([]);
-            setHasFetched(false);
-            setError(null);
-            setLoading(false);
-            if (!walletAddress) return;
-            
-            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
-            const cached = localStorage.getItem(cacheKey);
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState<PageSize>(25);
+
+    // Clear state when wallet changes
+    useEffect(() => {
+        latestWalletRef.current = walletAddress;
+        // Reset state for new wallet context
+        setTransactions([]);
+        setHasFetched(false);
+        setError(null);
+        setLoading(false);
+        setCurrentPage(1);
+        if (!walletAddress) return;
+
+        const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+        const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const { transactions: cachedTransactions, timestamp }: CachedData = JSON.parse(cached);
@@ -56,11 +64,12 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
-                if (!requestWallet) throw new Error('Connect a wallet to fetch transactions');
-                const events = await transactionService.fetchStableCoinPurchases(requestWallet);
-                if (latestWalletRef.current !== requestWallet) return;
+            if (!requestWallet) throw new Error('Connect a wallet to fetch transactions');
+            const events = await transactionService.fetchStableCoinPurchases(requestWallet);
+            if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
+            setCurrentPage(1); // Reset to first page on fresh fetch
 
             // Cache the data (convert BigInt to string for serialization)
             const serializableEvents = events.map(event => ({
@@ -72,10 +81,10 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-               if (requestWallet) {
-                    const cacheKey = `${CACHE_KEY}_${requestWallet}`;
-                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-               }
+            if (requestWallet) {
+                const cacheKey = `${CACHE_KEY}_${requestWallet}`;
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            }
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -83,21 +92,31 @@ export function useTransactions() {
             setLoading(false);
         }
     };
-        const clearCache = () => {
-            if (walletAddress) {
-                const cacheKey = `${CACHE_KEY}_${walletAddress}`;
-                localStorage.removeItem(cacheKey);
-            }
+    const clearCache = () => {
+        if (walletAddress) {
+            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            localStorage.removeItem(cacheKey);
+        }
         setTransactions([]);
         setHasFetched(false);
+        setCurrentPage(1);
     };
 
     return {
         transactions,
+        paginatedTransactions,
         loading,
         error,
         hasFetched,
         fetchTransactions,
-        clearCache
+        clearCache,
+        // Pagination
+        currentPage,
+        pageSize,
+        totalPages,
+        totalCount: transactions.length,
+        goToPage,
+        changePageSize,
+        pageSizeOptions: PAGE_SIZE_OPTIONS,
     };
 }

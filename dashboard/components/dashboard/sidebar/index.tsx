@@ -1,6 +1,6 @@
 "use client"
 
-import type * as React from "react"
+import * as React from "react"
 import Link from "next/link" // Added Link import for proper Next.js navigation
 import Image from "next/image"
 import BracketsIcon from "@/components/icons/brackets" // Fixed icon imports to use individual file paths
@@ -29,6 +29,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { useWallet } from "@/hooks/use-wallet"
+import { PlusIcon, MinusIcon } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 // This is sample data for the sidebar
 const data = {
@@ -61,9 +65,68 @@ const data = {
   },
 }
 
+function AddAddressDialog() {
+  const [open, setOpen] = React.useState(false)
+  const [address, setAddress] = React.useState("")
+  const [error, setError] = React.useState("")
+  const { addAddress, additionalAddresses } = useWallet()
+
+  const handleAdd = () => {
+    const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/
+    if (!evmAddressRegex.test(address)) {
+      setError("Invalid EVM address")
+      return
+    }
+    if (additionalAddresses.includes(address)) {
+      setError("Address already added")
+      return
+    }
+    addAddress(address)
+    setAddress("")
+    setError("")
+    setOpen(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen)
+      if (!isOpen) {
+        setAddress("")
+        setError("")
+      }
+    }}>
+      <DialogTrigger asChild>
+        <button className="text-sidebar-foreground hover:text-sidebar-accent-foreground flex items-center justify-center p-1 rounded hover:bg-sidebar-accent transition-colors">
+          <PlusIcon className="size-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Merchant Address</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-4">
+          <Input 
+            placeholder="0x..." 
+            value={address} 
+            onChange={(e) => {
+              setAddress(e.target.value)
+              setError("")
+            }} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAdd()
+            }}
+          />
+          {error && <span className="text-red-500 text-sm">{error}</span>}
+          <Button onClick={handleAdd}>Add Address</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function DashboardSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const { walletAddress, isConnected, connectWallet, disconnectWallet } = useWallet()
+  const { walletAddress, isConnected, connectWallet, disconnectWallet, additionalAddresses, removeAddress } = useWallet()
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
@@ -136,9 +199,12 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
 
       <SidebarFooter className="p-0">
         <SidebarGroup>
-          <SidebarGroupLabel>
-            <Bullet className="mr-2" />
-            Merchant Address
+          <SidebarGroupLabel className="flex items-center justify-between w-full pr-2">
+            <span className="flex items-center">
+              <Bullet className="mr-2" />
+              Merchant Address
+            </span>
+            <AddAddressDialog />
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -192,6 +258,32 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                   </button>
                 )}
               </SidebarMenuItem>
+              {additionalAddresses.map((addr) => (
+                <SidebarMenuItem key={addr}>
+                  <div className="flex gap-0.5 w-full group">
+                    <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                      <CreditCardIcon className="size-8" />
+                    </div>
+                    <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded">
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate text-xl font-display">
+                          {`${addr.slice(0, 6)}...${addr.slice(-4)}`}
+                        </span>
+                        <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
+                          Added
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => removeAddress(addr)}
+                        className="ml-auto p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10 rounded text-muted-foreground hover:text-red-500"
+                        title="Remove address"
+                      >
+                        <MinusIcon className="size-5" />
+                      </button>
+                    </div>
+                  </div>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

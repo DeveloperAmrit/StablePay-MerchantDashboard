@@ -121,7 +121,7 @@ export class TransactionService {
         client: PublicClient,
         contractAddress: string,
         networkKey: string,
-        merchantAddress?: string
+        merchantAddresses?: string[]
     ): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await client.getBlockNumber();
@@ -137,8 +137,9 @@ export class TransactionService {
                 const purchaseEvents = await client.getLogs({
                     address: contractAddress as `0x${string}`,
                     event: STABLEPAY_EVENT,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    args: merchantAddress ? { receiver: merchantAddress } as any : undefined,
+                    args: merchantAddresses && merchantAddresses.length > 0
+                        ? { receiver: merchantAddresses as `0x${string}`[] }
+                        : undefined,
                     fromBlock,
                     toBlock
                 });
@@ -167,7 +168,7 @@ export class TransactionService {
         client: PublicClient,
         contractAddress: string,
         networkKey: string,
-        merchantAddress: string | undefined,
+        merchantAddresses: string[] | undefined,
         onChunk: (events: TransactionEvent[]) => void,
         options?: {
             signal?: AbortSignal;
@@ -194,8 +195,9 @@ export class TransactionService {
                 const purchaseEvents = await client.getLogs({
                     address: contractAddress as `0x${string}`,
                     event: STABLEPAY_EVENT,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    args: merchantAddress ? { receiver: merchantAddress } as any : undefined,
+                    args: merchantAddresses && merchantAddresses.length > 0
+                        ? { receiver: merchantAddresses as `0x${string}`[] }
+                        : undefined,
                     fromBlock,
                     toBlock,
                 });
@@ -285,26 +287,26 @@ export class TransactionService {
         });
     }
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    async fetchStableCoinPurchases(merchantAddresses?: string[]): Promise<TransactionEvent[]> {
         try {
             const [sepoliaEvents, etcEvents, mordorEvents] = await Promise.all([
                 this.fetchEventsFromNetwork(
                     this.sepoliaClient,
                     CONTRACTS.stablepay.address,
                     'sepolia',
-                    merchantAddress
+                    merchantAddresses
                 ),
                 this.fetchEventsFromNetwork(
                     this.etcClient,
                     CONTRACTS['stablepay-etc'].address,
                     'ethereum-classic',
-                    merchantAddress
+                    merchantAddresses
                 ),
                 this.fetchEventsFromNetwork(
                     this.mordorClient,
                     CONTRACTS['stablepay-mordor'].address,
                     'mordor',
-                    merchantAddress
+                    merchantAddresses
                 )
             ]);
 
@@ -331,7 +333,7 @@ export class TransactionService {
      * @returns Per-network cursor results for resuming later
      */
     async fetchStableCoinPurchasesProgressive(
-        merchantAddress: string | undefined,
+        merchantAddresses: string[] | undefined,
         onChunk: (events: TransactionEvent[]) => void,
         options?: {
             signal?: AbortSignal;
@@ -358,7 +360,7 @@ export class TransactionService {
                     client,
                     contract,
                     key,
-                    merchantAddress,
+                    merchantAddresses,
                     onChunk,
                     { signal: options?.signal, resumeFromBlock }
                 );

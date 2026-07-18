@@ -12,17 +12,27 @@ interface AdditionalAddressesState {
     setAddresses: (addresses: string[]) => void;
 }
 
+const persistAddresses = (addresses: string[]) => {
+    try {
+        localStorage.setItem(ADDITIONAL_ADDRESSES_KEY, JSON.stringify(addresses));
+    } catch (e) {
+        console.warn('Failed to persist additional addresses:', e);
+    }
+};
+
 const useAdditionalAddressesStore = create<AdditionalAddressesState>((set) => ({
     additionalAddresses: [],
     addAddress: (newAddress) => set((state) => {
-        if (state.additionalAddresses.includes(newAddress)) return state;
-        const updated = [...state.additionalAddresses, newAddress];
-        localStorage.setItem(ADDITIONAL_ADDRESSES_KEY, JSON.stringify(updated));
+        const normalized = newAddress.toLowerCase();
+        if (state.additionalAddresses.some(a => a.toLowerCase() === normalized)) return state;
+        const updated = [...state.additionalAddresses, normalized];
+        persistAddresses(updated);
         return { additionalAddresses: updated };
     }),
     removeAddress: (addressToRemove) => set((state) => {
-        const updated = state.additionalAddresses.filter(a => a !== addressToRemove);
-        localStorage.setItem(ADDITIONAL_ADDRESSES_KEY, JSON.stringify(updated));
+        const normalized = addressToRemove.toLowerCase();
+        const updated = state.additionalAddresses.filter(a => a.toLowerCase() !== normalized);
+        persistAddresses(updated);
         return { additionalAddresses: updated };
     }),
     setAddresses: (addresses) => set({ additionalAddresses: addresses }),
@@ -51,7 +61,12 @@ export function useWallet() {
             if (stored) {
                 const parsed = JSON.parse(stored);
                 if (Array.isArray(parsed)) {
-                    setAddresses(parsed);
+                    const sanitized = Array.from(
+                        new Set(
+                            parsed.filter((a): a is string => typeof a === 'string').map(a => a.toLowerCase())
+                        )
+                    );
+                    setAddresses(sanitized);
                 }
             }
         } catch (e) {
@@ -67,10 +82,12 @@ export function useWallet() {
         disconnect();
     };
 
-    const consideredAddresses = [
-        ...(walletAddress ? [walletAddress] : []),
-        ...additionalAddresses
-    ];
+    const consideredAddresses = Array.from(
+        new Map(
+            [...(walletAddress ? [walletAddress] : []), ...additionalAddresses]
+                .map(a => [a.toLowerCase(), a] as const)
+        ).values()
+    );
 
     return {
         walletAddress,

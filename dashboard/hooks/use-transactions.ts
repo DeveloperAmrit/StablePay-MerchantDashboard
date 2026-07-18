@@ -185,6 +185,8 @@ export function useTransactions() {
         setLoading(false);
         setCurrentPage(1);
         setTimestampsFetched(false);
+        setIsAllTransactionsFetched(false);
+        setNetworkCursors({});
         if (!isDevelopment && activeAddresses.length === 0) return;
 
         const cacheKey = `${CACHE_KEY}_${addressesKey || 'dev'}`;
@@ -354,8 +356,8 @@ export function useTransactions() {
                 return tx;
             });
             
-            const requestWallet = latestWalletRef.current;
-            persistToCache(updatedTransactions, requestWallet, isAllTransactionsFetched, networkCursors);
+            const requestAddresses = latestAddressesRef.current;
+            persistToCache(updatedTransactions, requestAddresses, isAllTransactionsFetched, networkCursors);
             return updatedTransactions;
         });
 

@@ -137,8 +137,9 @@ export class TransactionService {
                 const purchaseEvents = await client.getLogs({
                     address: contractAddress as `0x${string}`,
                     event: STABLEPAY_EVENT,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    args: merchantAddresses && merchantAddresses.length > 0 ? { receiver: merchantAddresses } as any : undefined,
+                    args: merchantAddresses && merchantAddresses.length > 0
+                        ? { receiver: merchantAddresses as `0x${string}`[] }
+                        : undefined,
                     fromBlock,
                     toBlock
                 });
@@ -194,8 +195,9 @@ export class TransactionService {
                 const purchaseEvents = await client.getLogs({
                     address: contractAddress as `0x${string}`,
                     event: STABLEPAY_EVENT,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    args: merchantAddresses && merchantAddresses.length > 0 ? { receiver: merchantAddresses } as any : undefined,
+                    args: merchantAddresses && merchantAddresses.length > 0
+                        ? { receiver: merchantAddresses as `0x${string}`[] }
+                        : undefined,
                     fromBlock,
                     toBlock,
                 });

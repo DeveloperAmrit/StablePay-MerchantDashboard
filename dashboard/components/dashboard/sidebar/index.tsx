@@ -77,7 +77,7 @@ function AddAddressDialog() {
       setError("Invalid EVM address")
       return
     }
-    if (additionalAddresses.includes(address)) {
+    if (additionalAddresses.some(a => a.toLowerCase() === address.toLowerCase())) {
       setError("Address already added")
       return
     }
@@ -96,7 +96,11 @@ function AddAddressDialog() {
       }
     }}>
       <DialogTrigger asChild>
-        <button className="text-sidebar-foreground hover:text-sidebar-accent-foreground flex items-center justify-center p-1 rounded hover:bg-sidebar-accent transition-colors">
+        <button
+          type="button"
+          aria-label="Add merchant address"
+          className="text-sidebar-foreground hover:text-sidebar-accent-foreground flex items-center justify-center p-1 rounded hover:bg-sidebar-accent transition-colors"
+        >
           <PlusIcon className="size-4" />
         </button>
       </DialogTrigger>
@@ -273,10 +277,12 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                           Added
                         </span>
                       </div>
-                      <button 
+                      <button
+                        type="button"
                         onClick={() => removeAddress(addr)}
                         className="ml-auto p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10 rounded text-muted-foreground hover:text-red-500"
                         title="Remove address"
+                        aria-label={`Remove address ${addr}`}
                       >
                         <MinusIcon className="size-5" />
                       </button>

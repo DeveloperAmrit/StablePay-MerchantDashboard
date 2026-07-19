@@ -44,6 +44,15 @@ export default function DashboardStat({ label, value, description, icon, tag, in
 
   const { prefix, numericValue, suffix, isNumeric } = parseValue(value)
 
+  // `intent` is optional, so anything other than positive/negative falls back
+  // to the neutral styling rather than rendering an uncolored pill.
+  const trendPillClassName =
+    intent === "positive"
+      ? "bg-success/10 text-success"
+      : intent === "negative"
+        ? "bg-destructive/10 text-destructive"
+        : "bg-muted text-muted-foreground"
+
   return (
     <Card className="group relative overflow-hidden shadow-card hover:shadow-elevated transition-shadow duration-300">
       <CardHeader className="flex items-center justify-between pb-4">
@@ -68,16 +77,17 @@ export default function DashboardStat({ label, value, description, icon, tag, in
             <span
               className={cn(
                 "mb-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium",
-                intent === "positive" && "bg-success/10 text-success",
-                intent === "negative" && "bg-destructive/10 text-destructive",
-                intent === "neutral" && "bg-muted text-muted-foreground",
+                trendPillClassName,
               )}
             >
               {direction === "up" ? (
-                <ArrowUpRight className="size-3.5" />
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
               ) : (
-                <ArrowDownRight className="size-3.5" />
+                <ArrowDownRight className="size-3.5" aria-hidden="true" />
               )}
+              <span className="sr-only">
+                {direction === "up" ? "Trending up" : "Trending down"}
+              </span>
             </span>
           )}
         </div>

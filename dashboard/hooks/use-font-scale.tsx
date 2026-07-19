@@ -81,5 +81,12 @@ export function useFontScale() {
 /**
  * Inline script that runs before paint to set --font-scale from localStorage,
  * preventing a flash of the default text size on first load.
+ *
+ * The scale map is serialized from FONT_SCALES so it can never drift from the
+ * values used at runtime.
  */
-export const FONT_SCALE_SCRIPT = `(function(){try{var s=localStorage.getItem("${STORAGE_KEY}");var m={sm:0.9,base:1,lg:1.1,xl:1.2};if(s&&m[s]){document.documentElement.style.setProperty("--font-scale",String(m[s]));}}catch(e){}})();`
+export const FONT_SCALE_SCRIPT = `(function(){try{var s=localStorage.getItem(${JSON.stringify(
+  STORAGE_KEY,
+)});var m=${JSON.stringify(
+  FONT_SCALES,
+)};if(s&&Object.prototype.hasOwnProperty.call(m,s)){document.documentElement.style.setProperty("--font-scale",String(m[s]));}}catch(e){}})();`
